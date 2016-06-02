@@ -15,12 +15,14 @@ import (
 	"unsafe"
 )
 
+// 互斥量
+
 // A Mutex is a mutual exclusion lock.
 // Mutexes can be created as part of other structures;
 // the zero value for a Mutex is an unlocked mutex.
 type Mutex struct {
-	state int32
-	sema  uint32
+	state int32  // 锁状态（锁变量）：0-未锁定；非0-锁定；它的作用是保护信号量
+	sema  uint32 // 信号量：0-表示没有保存下来的唤醒操作（即没有 Unlock 操作）；正值—表示有一个或多个唤醒操作
 }
 
 // A Locker represents an object that can be locked and unlocked.
@@ -39,6 +41,8 @@ const (
 // If the lock is already in use, the calling goroutine
 // blocks until the mutex is available.
 func (m *Mutex) Lock() {
+	// m.state 和 0(未锁定) 比较，如果相等，表示未锁定，然后将其锁定，并返回 true
+	// 这个过程是原子的
 	// Fast path: grab unlocked mutex.
 	if atomic.CompareAndSwapInt32(&m.state, 0, mutexLocked) {
 		if raceenabled {
@@ -47,8 +51,10 @@ func (m *Mutex) Lock() {
 		return
 	}
 
+	// 执行到这里，表示已经被其他 goroutine 锁定了，需要阻塞
+
 	awoke := false
-	iter := 0
+	iter := 0 // 用户控制自旋锁重试次数（active_spin == 4）
 	for {
 		old := m.state
 		new := old | mutexLocked
@@ -73,12 +79,15 @@ func (m *Mutex) Lock() {
 			if new&mutexWoken == 0 {
 				panic("sync: inconsistent mutex state")
 			}
+			// 只保留一位: new = new & 1
 			new &^= mutexWoken
 		}
 		if atomic.CompareAndSwapInt32(&m.state, old, new) {
 			if old&mutexLocked == 0 {
 				break
 			}
+			// 信号量的 down 操作：检查 m.sema 是否大于 0，若大于 0，则 m.sema--（即用掉保存的唤醒操作）并继续；
+			// 若为 0，则该 goroutine 休眠，而且此时 runtime_Semacquire 并未结束
 			runtime_Semacquire(&m.sema)
 			awoke = true
 			iter = 0
@@ -118,6 +127,7 @@ func (m *Mutex) Unlock() {
 		// Grab the right to wake someone.
 		new = (old - 1<<mutexWaiterShift) | mutexWoken
 		if atomic.CompareAndSwapInt32(&m.state, old, new) {
+			// 信号量的 up 操作：m.sema++，并选择一个等待的 goroutine ，将其唤醒
 			runtime_Semrelease(&m.sema)
 			return
 		}

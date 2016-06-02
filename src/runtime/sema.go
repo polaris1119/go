@@ -60,6 +60,7 @@ func net_runtime_Semrelease(addr *uint32) {
 
 // Called from runtime.
 func semacquire(addr *uint32, profile bool) {
+	// 当前 goroutine，gp.m.curg 表示 gp 所在 m 中的当前运行的 goroutine
 	gp := getg()
 	if gp != gp.m.curg {
 		throw("semacquire not on the G stack")

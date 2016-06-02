@@ -45,6 +45,7 @@ func schedinit() {
 		_g_.racectx = raceinit()
 	}
 
+	// 最大系统线程数量限制，参考标准库 runtime/debug.SetMaxThreads
 	sched.maxmcount = 10000
 
 	// Cache the framepointer experiment.  This affects stack unwinding.
@@ -52,16 +53,22 @@ func schedinit() {
 
 	tracebackinit()
 	moduledataverify()
+
+	// 执行 栈、内存分配器、调度器相关初始化
 	stackinit()
 	mallocinit()
 	mcommoninit(_g_.m)
 
+	// 处理命令行参数和环境变量
 	goargs()
 	goenvs()
+	// 处理 GODEBUG、GOTRACEBACK 调试相关的环境变量设置
 	parsedebugvars()
+	// 垃圾回收器初始化
 	gcinit()
 
 	sched.lastpoll = uint64(nanotime())
+	// 通过 CPU Core 和 GOMAXPROCS 环境变量确定 P 数量
 	procs := int(ncpu)
 	if n := atoi(gogetenv("GOMAXPROCS")); n > 0 {
 		if n > _MaxGomaxprocs {
@@ -69,6 +76,7 @@ func schedinit() {
 		}
 		procs = n
 	}
+	// 调整 P 数量，重新平衡任务队列
 	if procresize(int32(procs)) != nil {
 		throw("unknown runnable goroutine during bootstrap")
 	}

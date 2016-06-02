@@ -11,6 +11,7 @@
 // It is ok for the linker to get multiple of these symbols.  It will
 // pick one of the duplicates to use.
 #define DUPOK	2
+// 本函数不进行分离栈检查。也就是保证本函数的栈不分离，即保证栈内存连续。
 // Don't insert stack check preamble.
 #define NOSPLIT	4
 // Put this data in a read-only section.

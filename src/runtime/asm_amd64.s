@@ -104,19 +104,22 @@ ok:
 	MOVL	AX, 0(SP)
 	MOVQ	24(SP), AX		// copy argv
 	MOVQ	AX, 8(SP)
+	// 调用初始化函数
 	CALL	runtime·args(SB)
 	CALL	runtime·osinit(SB)
 	CALL	runtime·schedinit(SB)
 
 	// create a new goroutine to start program
+	// 创建 goroutine 用于运行 runtime.main 函数
 	MOVQ	$runtime·mainPC(SB), AX		// entry
 	PUSHQ	AX
 	PUSHQ	$0			// arg size
-	CALL	runtime·newproc(SB)
+	CALL	runtime·newproc(SB)		// runtime.newproce 用于创建 goroutine
 	POPQ	AX
 	POPQ	AX
 
 	// start this M
+	// 启动系统线程用于运行 goroutine 并发任务
 	CALL	runtime·mstart(SB)
 
 	MOVL	$0xf1, 0xf1  // crash

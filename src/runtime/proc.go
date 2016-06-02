@@ -35,6 +35,7 @@ func main() {
 	// Max stack size is 1 GB on 64-bit, 250 MB on 32-bit.
 	// Using decimal instead of binary GB and MB because
 	// they look nicer in the stack overflow failure message.
+	// 执行栈最大限制：1 GB on 64-bit, 250 MB on 32-bit
 	if ptrSize == 8 {
 		maxstacksize = 1000000000
 	} else {
@@ -44,6 +45,7 @@ func main() {
 	// Record when the world started.
 	runtimeInitTime = nanotime()
 
+	// 启动系统后台监控（定期垃圾回收，以及并发任务调度相关）
 	systemstack(func() {
 		newm(sysmon, nil)
 	})
@@ -60,6 +62,7 @@ func main() {
 		throw("runtime.main not on m0")
 	}
 
+	// 执行 runtime 包内所有初始化函数 init
 	runtime_init() // must be before defer
 
 	// Defer unlock so that runtime.Goexit during init does the unlock too.
@@ -70,6 +73,7 @@ func main() {
 		}
 	}()
 
+	// 启动垃圾回收器后台操作
 	gcenable()
 
 	main_init_done = make(chan bool)
@@ -97,6 +101,7 @@ func main() {
 		cgocall(_cgo_notify_runtime_init_done, nil)
 	}
 
+	// 执行所有用户包（包括标准库）初始化函数 init
 	main_init()
 	close(main_init_done)
 
@@ -108,6 +113,7 @@ func main() {
 		// has a main, but it is not executed.
 		return
 	}
+	// 执行用户逻辑入口 main.main 函数
 	main_main()
 	if raceenabled {
 		racefini()
@@ -121,6 +127,7 @@ func main() {
 		gopark(nil, nil, "panicwait", traceEvGoStop, 1)
 	}
 
+	// 执行结束，返回退出状态码
 	exit(0)
 	for {
 		var x *int32
