@@ -59,6 +59,7 @@ func timeSleep(ns int64) {
 	goparkunlock(&timers.lock, "sleep", traceEvGoSleep, 2)
 }
 
+// http://docs.studygolang.com/cmd/compile/ go:linkname
 // startTimer adds t to the timer heap.
 //go:linkname startTimer time.startTimer
 func startTimer(t *timer) {
@@ -240,7 +241,7 @@ func siftupTimer(i int) {
 	when := t[i].when
 	tmp := t[i]
 	for i > 0 {
-		p := (i - 1) / 4 // parent
+		p := (i - 1) / 4 // parent	// 可见是一个 4 叉树堆（最小堆）
 		if when >= t[p].when {
 			break
 		}

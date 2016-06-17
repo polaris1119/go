@@ -24,11 +24,12 @@ TEXT	·Syscall(SB),NOSPLIT,$0-56
 	MOVQ	$0, R9
 	MOVQ	trap+0(FP), AX	// syscall entry
 	SYSCALL
-	CMPQ	AX, $0xfffffffffffff001
+	// 0xfffffffffffff001 是 linux MAX_ERRNO 取反 转无符号，http://lxr.free-electrons.com/source/include/linux/err.h#L17
+	CMPQ	AX, $0xfffffffffffff001		// 发生错误，r1=-1
 	JLS	ok
 	MOVQ	$-1, r1+32(FP)
 	MOVQ	$0, r2+40(FP)
-	NEGQ	AX
+	NEGQ	AX							// 错误码，因为错误码是负数，这里转为正数
 	MOVQ	AX, err+48(FP)
 	CALL	runtime·exitsyscall(SB)
 	RET

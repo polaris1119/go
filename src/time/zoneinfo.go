@@ -35,9 +35,10 @@ type Location struct {
 type zone struct {
 	name   string // abbreviated name, "CET"
 	offset int    // seconds east of UTC
-	isDST  bool   // is this zone Daylight Savings Time?
+	isDST  bool   // is this zone Daylight Savings Time? 夏日节约时间（下令时间）
 }
 
+// 夏日节约时间的转换？确切意义还未知
 // A zoneTrans represents a single time zone transition.
 type zoneTrans struct {
 	when         int64 // transition time, in seconds since 1970 GMT
