@@ -30,6 +30,7 @@ const (
 func futexsleep(addr *uint32, val uint32, ns int64) {
 	var ts timespec
 
+	// 不超时
 	// Some Linux kernels have a bug where futex of
 	// FUTEX_WAIT returns an internal error code
 	// as an errno.  Libpthread ignores the return value
@@ -53,12 +54,15 @@ func futexsleep(addr *uint32, val uint32, ns int64) {
 		ts.tv_nsec = 0
 		ts.set_sec(int64(timediv(ns, 1000000000, (*int32)(unsafe.Pointer(&ts.tv_nsec)))))
 	}
+
+	// 如果 futex_value == val，则进入休眠等待状态，知道 FUTEX_WAKE 或超时
 	futex(unsafe.Pointer(addr), _FUTEX_WAIT, val, unsafe.Pointer(&ts), nil, 0)
 }
 
 // If any procs are sleeping on addr, wake up at most cnt.
 //go:nosplit
 func futexwakeup(addr *uint32, cnt uint32) {
+	// 唤醒 cnt 个等待单位，这回设置 futex_value = 1
 	ret := futex(unsafe.Pointer(addr), _FUTEX_WAKE, cnt, nil, nil, 0)
 	if ret >= 0 {
 		return

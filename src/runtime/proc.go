@@ -198,6 +198,7 @@ func goparkunlock(lock *mutex, reason string, traceEv byte, traceskip int) {
 	gopark(parkunlock_c, unsafe.Pointer(lock), reason, traceEv, traceskip)
 }
 
+// 恢复执行，G 被放回优先级最高的 P.runnext
 func goready(gp *g, traceskip int) {
 	systemstack(func() {
 		ready(gp, traceskip)

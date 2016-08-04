@@ -55,12 +55,16 @@ functions to make sure that this limit cannot be violated.
 */
 
 const (
+	// 栈空间的初始分配发生在 newproc1 创建新 G 对象时
+	//
+	// 操作系统需要保留的区域，比如用来处理信号等等
 	// StackSystem is a number of additional bytes to add
 	// to each stack below the usual guard area for OS-specific
 	// purposes like signal handling. Used on Windows, Plan 9,
 	// and Darwin/ARM because they do not use a separate stack.
 	_StackSystem = goos_windows*512*ptrSize + goos_plan9*512 + goos_darwin*goarch_arm*1024
 
+	// 默认栈大小（2k）
 	// The minimum size of stack used by Go code
 	_StackMin = 2048
 
@@ -82,6 +86,7 @@ const (
 	// space at zero.
 	_StackBig = 4096
 
+	// _StackGuard 是一个警戒指针，用来判断栈容量是否需要扩张
 	// The stack guard is a pointer this many bytes above the
 	// bottom of the stack.
 	_StackGuard = 640*stackGuardMultiplier + _StackSystem
@@ -95,6 +100,8 @@ const (
 	// functions can use.
 	_StackLimit = _StackGuard - _StackSystem - _StackSmall
 )
+
+// 以上常量值，以 Linux 系统为例，_StackSystem = 0，_StackGuard = 640
 
 // Goroutine preemption request.
 // Stored into g->stackguard0 to cause split stack check failure.

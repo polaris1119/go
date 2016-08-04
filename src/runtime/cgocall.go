@@ -81,6 +81,7 @@ package runtime
 
 import "unsafe"
 
+// 执行 cgo 调用时，会用 lockOSThread 将 G 锁定在当前线程
 // Call from Go to C.
 //go:nosplit
 func cgocall(fn, arg unsafe.Pointer) int32 {

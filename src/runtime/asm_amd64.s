@@ -111,15 +111,17 @@ ok:
 
 	// create a new goroutine to start program
 	// 创建 goroutine 用于运行 runtime.main 函数
+	// main goroutine，并将其放入当前 P 本地队列
 	MOVQ	$runtime·mainPC(SB), AX		// entry
 	PUSHQ	AX
 	PUSHQ	$0			// arg size
-	CALL	runtime·newproc(SB)		// runtime.newproce 用于创建 goroutine
+	CALL	runtime·newproc(SB)		// runtime.newproc 用于创建 goroutine
 	POPQ	AX
 	POPQ	AX
 
 	// start this M
-	// 启动系统线程用于运行 goroutine 并发任务
+	// 启动系统线程用于运行 goroutine 并发任务。
+	// 即让当前 m0 进入调度，执行 main goroutine
 	CALL	runtime·mstart(SB)
 
 	MOVL	$0xf1, 0xf1  // crash
@@ -156,6 +158,7 @@ TEXT runtime·gosave(SB), NOSPLIT, $0-8
 	MOVQ	BX, gobuf_g(AX)
 	RET
 
+// 该函数从 g0 栈切换到 G 栈，然后用一个 JMP 指令进入 G 任务函数
 // void gogo(Gobuf*)
 // restore state from Gobuf; longjmp
 TEXT runtime·gogo(SB), NOSPLIT, $0-8
@@ -163,8 +166,8 @@ TEXT runtime·gogo(SB), NOSPLIT, $0-8
 	MOVQ	gobuf_g(BX), DX
 	MOVQ	0(DX), CX		// make sure g != nil
 	get_tls(CX)
-	MOVQ	DX, g(CX)
-	MOVQ	gobuf_sp(BX), SP	// restore SP
+	MOVQ	DX, g(CX)			// g = G
+	MOVQ	gobuf_sp(BX), SP	// restore SP 通过恢复 SP 寄存器值切换到 G 栈
 	MOVQ	gobuf_ret(BX), AX
 	MOVQ	gobuf_ctxt(BX), DX
 	MOVQ	gobuf_bp(BX), BP
@@ -172,8 +175,8 @@ TEXT runtime·gogo(SB), NOSPLIT, $0-8
 	MOVQ	$0, gobuf_ret(BX)
 	MOVQ	$0, gobuf_ctxt(BX)
 	MOVQ	$0, gobuf_bp(BX)
-	MOVQ	gobuf_pc(BX), BX
-	JMP	BX
+	MOVQ	gobuf_pc(BX), BX	// 获取 G 任务函数地址
+	JMP	BX						// 执行
 
 // func mcall(fn func(*g))
 // Switch to m->g0's stack, call fn(g).
@@ -226,15 +229,15 @@ TEXT runtime·systemstack(SB), NOSPLIT, $0-8
 	MOVQ	g_m(AX), BX	// BX = m
 
 	MOVQ	m_gsignal(BX), DX	// DX = gsignal
-	CMPQ	AX, DX
+	CMPQ	AX, DX 	// 如果当前 g 是信号处理 g，那么无需切换
 	JEQ	noswitch
 
 	MOVQ	m_g0(BX), DX	// DX = g0
-	CMPQ	AX, DX
+	CMPQ	AX, DX	// 如果当前 g 已经是 g0, 那么无需切换
 	JEQ	noswitch
 
-	MOVQ	m_curg(BX), R8
-	CMPQ	AX, R8
+	MOVQ	m_curg(BX), R8 	// 当前 g
+	CMPQ	AX, R8 	// 如果是用户逻辑 g, 切换
 	JEQ	switch
 	
 	// Bad: g is not gsignal, not g0, not curg. What is it?
@@ -242,6 +245,7 @@ TEXT runtime·systemstack(SB), NOSPLIT, $0-8
 	CALL	AX
 
 switch:
+	// 将 g 状态保存到 sched
 	// save our state in g->sched.  Pretend to
 	// be systemstack_switch if the G stack is scanned.
 	MOVQ	$runtime·systemstack_switch(SB), SI
@@ -250,20 +254,23 @@ switch:
 	MOVQ	AX, (g_sched+gobuf_g)(AX)
 	MOVQ	BP, (g_sched+gobuf_bp)(AX)
 
+	// 切换到 g0.stack
 	// switch to g0
-	MOVQ	DX, g(CX)
-	MOVQ	(g_sched+gobuf_sp)(DX), BX
+	MOVQ	DX, g(CX)					// DX = g0
+	MOVQ	(g_sched+gobuf_sp)(DX), BX	// 从 g0.sched 获取 SP
 	// make it look like mstart called systemstack on g0, to stop traceback
-	SUBQ	$8, BX
+	SUBQ	$8, BX						// 调整 SP
 	MOVQ	$runtime·mstart(SB), DX
 	MOVQ	DX, 0(BX)
-	MOVQ	BX, SP
+	MOVQ	BX, SP 						// 通过调整 SP 寄存器值来切换栈内存
 
+	// 执行系统管理函数
 	// call target function
-	MOVQ	DI, DX
+	MOVQ	DI, DX						// DI = fn
 	MOVQ	0(DI), DI
 	CALL	DI
 
+	// 切换回 g，恢复执行现场
 	// switch back to g
 	get_tls(CX)
 	MOVQ	g(CX), AX

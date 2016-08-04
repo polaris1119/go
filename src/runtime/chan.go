@@ -15,16 +15,16 @@ const (
 )
 
 type hchan struct {
-	qcount   uint           // total data in the queue
-	dataqsiz uint           // size of the circular queue
-	buf      unsafe.Pointer // points to an array of dataqsiz elements
-	elemsize uint16
-	closed   uint32
-	elemtype *_type // element type
-	sendx    uint   // send index
-	recvx    uint   // receive index
-	recvq    waitq  // list of recv waiters
-	sendq    waitq  // list of send waiters
+	qcount   uint           // total data in the queue 缓冲槽有效数据项数量
+	dataqsiz uint           // size of the circular queue 缓冲槽大小（可存储数据项数量）
+	buf      unsafe.Pointer // points to an array of dataqsiz elements 缓冲槽指针
+	elemsize uint16         // 数据项大小
+	closed   uint32         // 是否关闭
+	elemtype *_type         // element type 数据项类型
+	sendx    uint           // send index 缓冲槽发送位置索引
+	recvx    uint           // receive index 缓冲槽接收位置索引
+	recvq    waitq          // list of recv waiters 接收者等待队列
+	sendq    waitq          // list of send waiters 发送者等待队列
 	lock     mutex
 }
 
@@ -41,6 +41,7 @@ func reflect_makechan(t *chantype, size int64) *hchan {
 func makechan(t *chantype, size int64) *hchan {
 	elem := t.elem
 
+	// 数据项不能超过 64k（这时候用指针更合适一些）
 	// compiler checks this but be safe.
 	if elem.size >= 1<<16 {
 		throw("makechan: invalid channel element type")
@@ -48,12 +49,16 @@ func makechan(t *chantype, size int64) *hchan {
 	if hchanSize%maxAlign != 0 || elem.align > maxAlign {
 		throw("makechan: bad alignment")
 	}
+	// 缓冲槽大小检查
 	if size < 0 || int64(uintptr(size)) != size || (elem.size > 0 && uintptr(size) > (_MaxMem-hchanSize)/uintptr(elem.size)) {
 		panic("makechan: size out of range")
 	}
 
 	var c *hchan
+
+	// 受垃圾回收器限制，指针类型缓冲槽需单独分配内存
 	if elem.kind&kindNoPointers != 0 || size == 0 {
+		// 因为缓冲槽大小固定，所以一次性分配内存
 		// Allocate memory in one call.
 		// Hchan does not contain pointers interesting for GC in this case:
 		// buf points into the same allocation, elemtype is persistent.
@@ -61,6 +66,7 @@ func makechan(t *chantype, size int64) *hchan {
 		// TODO(dvyukov,rlh): Rethink when collector can move allocated objects.
 		c = (*hchan)(mallocgc(hchanSize+uintptr(size)*uintptr(elem.size), nil, flagNoScan))
 		if size > 0 && elem.size != 0 {
+			// 调整缓冲槽起始指针
 			c.buf = add(unsafe.Pointer(c), hchanSize)
 		} else {
 			// race detector uses this location for synchronization
@@ -71,6 +77,8 @@ func makechan(t *chantype, size int64) *hchan {
 		c = new(hchan)
 		c.buf = newarray(elem, uintptr(size))
 	}
+
+	// 设置属性
 	c.elemsize = uint16(elem.size)
 	c.elemtype = elem
 	c.dataqsiz = uint(size)
